@@ -1,13 +1,16 @@
 import type { ExecutionEvent, ExecutionReport, StepDefinition, StepId, StepResult, TaskContract } from './contracts.js';
 import { validateGraph, readySteps } from './graph.js';
 import { evaluateStep } from './policy.js';
+import { validateTaskContract } from './validation.js';
 
 export interface ExecutorOptions {
   onEvent?: (event: ExecutionEvent) => void;
 }
 
 export async function executeTask(task: TaskContract, steps: readonly StepDefinition[], options: ExecutorOptions = {}): Promise<ExecutionReport> {
+  validateTaskContract(task);
   validateGraph(steps);
+  if (steps.length > task.budget.maxSteps) throw new Error('step graph exceeds maxSteps budget');
   const events: ExecutionEvent[] = [];
   const completed = new Map<StepId, StepResult>();
   const running = new Set<StepId>();
@@ -21,17 +24,14 @@ export async function executeTask(task: TaskContract, steps: readonly StepDefini
       controller.abort();
       return finish('failed', 'task runtime budget exceeded');
     }
-    if (completed.size + running.size >= task.budget.maxSteps) {
-      controller.abort();
-      return finish('failed', 'task step budget exceeded');
-    }
     const ready = readySteps(steps, new Set(completed.keys()), running);
     if (ready.length === 0) {
       if (running.size > 0) { await Promise.resolve(); continue; }
       return finish('failed', 'execution graph is blocked');
     }
-    const batch = ready.slice(0, Math.max(1, task.budget.maxToolCalls - toolCalls));
-    if (batch.length === 0) return finish('failed', 'tool-call budget exceeded');
+    const remainingCalls = task.budget.maxToolCalls - toolCalls;
+    if (remainingCalls < 1) return finish('failed', 'tool-call budget exceeded');
+    const batch = ready.slice(0, remainingCalls);
     batch.forEach((step) => running.add(step.id));
     toolCalls += batch.length;
     const results = await Promise.all(batch.map(async (step) => {

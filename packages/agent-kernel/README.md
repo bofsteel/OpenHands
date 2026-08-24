@@ -1,22 +1,13 @@
 # Agent Kernel
 
-The execution kernel provides a typed task contract, capability policy evaluation, DAG validation, bounded parallel scheduling, event emission, and deterministic execution reports.
-
-## Guarantees
-
-- Duplicate and missing graph dependencies are rejected.
-- Cyclic graphs are rejected before execution.
-- Independent steps run in the same scheduling batch.
-- A step cannot request a capability absent from the task contract.
-- Runtime, step, and tool-call budgets are enforced.
-- Every task and step transition emits a timestamped event.
-- Failed steps stop downstream execution and produce a structured report.
+This package is an executable foundation for controlled agent workflows. It provides typed task contracts, contract validation, capability policy evaluation, DAG validation, bounded parallel scheduling, event emission, and deterministic execution reports.
 
 ## Build and test
 
-From this directory:
+From the repository root:
 
 ```bash
-npx tsc -p tsconfig.json
-npm test
+npm --prefix packages/agent-kernel test
 ```
+
+The test command first compiles the TypeScript sources into `dist/`, then runs the Node test suite against the compiled modules. Invalid contracts, cyclic graphs, missing capabilities, dependency ordering, concurrent independent steps, and budget validation are covered by tests.

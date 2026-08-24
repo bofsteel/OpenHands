@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { executeTask } from '../dist/executor.js';
 import { validateGraph } from '../dist/graph.js';
+import { validateTaskContract } from '../dist/validation.js';
 
 test('rejects cyclic execution graphs', () => {
   assert.throws(() => validateGraph([
@@ -29,4 +30,9 @@ test('denies a step when capability is absent', async () => {
   const report = await executeTask(task, [{ id: 'secret', title: 'Secret', dependsOn: [], capabilities: ['secret.read'], run: async () => ({ status: 'succeeded' }) }]);
   assert.equal(report.status, 'failed');
   assert.match(report.completed.get('secret').error, /missing capabilities/);
+});
+
+test('rejects invalid task budgets', () => {
+  assert.throws(() => validateTaskContract({ id: 't', objective: 'x', allowedCapabilities: new Set(), budget: { maxSteps: 0, maxRuntimeMs: 1000, maxToolCalls: 1 } }), /maxSteps/);
+  assert.throws(() => validateTaskContract({ id: 't', objective: 'x', allowedCapabilities: new Set(), budget: { maxSteps: 1, maxRuntimeMs: 0, maxToolCalls: 1 } }), /maxRuntimeMs/);
 });
