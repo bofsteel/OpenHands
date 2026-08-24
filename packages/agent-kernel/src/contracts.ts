@@ -8,6 +8,12 @@ export interface TaskBudget {
   maxSteps: number;
   maxRuntimeMs: number;
   maxToolCalls: number;
+  maxConcurrentSteps: number;
+}
+
+export interface RetryPolicy {
+  maxAttempts: number;
+  backoffMs: number;
 }
 
 export interface TaskContract {
@@ -15,6 +21,7 @@ export interface TaskContract {
   objective: string;
   allowedCapabilities: ReadonlySet<string>;
   budget: TaskBudget;
+  retry?: RetryPolicy;
 }
 
 export interface StepDefinition {
@@ -22,6 +29,7 @@ export interface StepDefinition {
   title: string;
   dependsOn: readonly StepId[];
   capabilities: readonly string[];
+  retry?: RetryPolicy;
   run: (context: StepContext) => Promise<StepResult>;
 }
 
@@ -36,20 +44,24 @@ export interface StepResult {
   status: 'succeeded' | 'failed';
   output?: unknown;
   error?: string;
+  attempts?: number;
 }
 
 export interface ExecutionEvent {
-  type: 'task_started' | 'step_started' | 'step_finished' | 'task_finished';
+  type: 'task_started' | 'step_started' | 'step_retrying' | 'step_finished' | 'task_finished';
   taskId: TaskId;
   stepId?: StepId;
   status?: TaskStatus | StepStatus;
   timestamp: string;
   detail?: string;
+  attempt?: number;
 }
 
-export interface ExecutionReport {
+export interface ExecutionSnapshot {
   taskId: TaskId;
   status: TaskStatus;
   completed: ReadonlyMap<StepId, StepResult>;
   events: readonly ExecutionEvent[];
 }
+
+export interface ExecutionReport extends ExecutionSnapshot {}
