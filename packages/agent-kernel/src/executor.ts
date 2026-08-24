@@ -72,14 +72,14 @@ export async function executeTask(task: TaskContract, steps: readonly StepDefini
         if (result.status === 'failed') return finish('failed', result.error);
       }
     }
-    return finish('succeeded');
+    return await finish('succeeded');
   } finally {
     options.signal?.removeEventListener('abort', cancel);
   }
 
-  function finish(status: 'succeeded' | 'failed' | 'cancelled', detail?: string): ExecutionReport {
+  async function finish(status: 'succeeded' | 'failed' | 'cancelled', detail?: string): Promise<ExecutionReport> {
     emit({ type: 'task_finished', taskId: task.id, status, timestamp: new Date().toISOString(), detail });
-    void persist(status);
+    await persist(status);
     return { taskId: task.id, status, completed, events };
   }
 }

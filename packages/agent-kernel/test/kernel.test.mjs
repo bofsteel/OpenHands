@@ -47,18 +47,22 @@ test('passes task context to every retry attempt', async () => {
   assert.ok(seen[0].signal);
 });
 
-test('persists a running snapshot after completed steps and restores execution', async () => {
+test('persists and resumes an execution without losing the final step', async () => {
   const store = new InMemorySnapshotStore();
-  let secondRuns = 0;
-  const firstTask = { id: 'resume', objective: 'resume', allowedCapabilities: new Set(), budget: { maxSteps: 2, maxRuntimeMs: 1000, maxToolCalls: 2, maxConcurrentSteps: 1 } };
-  const firstSteps = [{ id: 'first', title: 'First', dependsOn: [], capabilities: [], run: async () => ({ status: 'succeeded', output: 'saved' }) }, { id: 'second', title: 'Second', dependsOn: ['first'], capabilities: [], run: async () => { secondRuns += 1; return { status: 'succeeded', output: 'done' }; } }];
-  const firstReport = await executeTask(firstTask, firstSteps, { snapshotStore: store });
-  assert.equal(firstReport.status, 'succeeded');
+  let runs = 0;
+  const task = { id: 'resume', objective: 'resume', allowedCapabilities: new Set(), budget: { maxSteps: 2, maxRuntimeMs: 1000, maxToolCalls: 2, maxConcurrentSteps: 1 } };
+  const steps = [
+    { id: 'first', title: 'First', dependsOn: [], capabilities: [], run: async () => ({ status: 'succeeded', output: 'saved' }) },
+    { id: 'second', title: 'Second', dependsOn: ['first'], capabilities: [], run: async () => { runs += 1; return { status: 'succeeded', output: 'done' }; } },
+  ];
+  const report = await executeTask(task, steps, { snapshotStore: store });
+  assert.equal(report.status, 'succeeded');
   const saved = await store.load('resume');
-  assert.equal(saved.completed.get('first').output, 'saved');
-  const resumed = await executeTask(firstTask, firstSteps, { snapshot: saved, snapshotStore: store });
+  assert.equal(saved.status, 'succeeded');
+  assert.equal(saved.completed.size, 2);
+  const resumed = await executeTask(task, steps, { snapshot: saved, snapshotStore: store });
   assert.equal(resumed.status, 'succeeded');
-  assert.equal(secondRuns, 2);
+  assert.equal(runs, 1);
 });
 
 test('serializes and restores versioned snapshots', async () => {
