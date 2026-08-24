@@ -2,12 +2,14 @@ import type { ExecutionEvent, ExecutionReport, StepDefinition, StepId, StepResul
 import { validateGraph, readySteps } from './graph.js';
 import { evaluateStep } from './policy.js';
 import { normalizeRetryPolicy, runWithRetry } from './retry.js';
+import type { SnapshotStore } from './snapshot.js';
 import { validateTaskContract } from './validation.js';
 
 export interface ExecutorOptions {
   onEvent?: (event: ExecutionEvent) => void;
   signal?: AbortSignal;
   snapshot?: { completed: ReadonlyMap<StepId, StepResult>; events: readonly ExecutionEvent[] };
+  snapshotStore?: SnapshotStore;
 }
 
 export async function executeTask(task: TaskContract, steps: readonly StepDefinition[], options: ExecutorOptions = {}): Promise<ExecutionReport> {
@@ -23,6 +25,14 @@ export async function executeTask(task: TaskContract, steps: readonly StepDefini
   options.signal?.addEventListener('abort', cancel, { once: true });
   if (options.signal?.aborted) controller.abort();
   const emit = (event: ExecutionEvent) => { events.push(event); options.onEvent?.(event); };
+  const persist = async (status: ExecutionReport['status']): Promise<void> => {
+    if (!options.snapshotStore) return;
+    try {
+      await options.snapshotStore.save({ taskId: task.id, status, completed, events });
+    } catch {
+      // Persistence must not change the task result.
+    }
+  };
   if (completed.size === 0) emit({ type: 'task_started', taskId: task.id, status: 'running', timestamp: new Date().toISOString() });
   let toolCalls = 0;
   try {
@@ -58,6 +68,7 @@ export async function executeTask(task: TaskContract, steps: readonly StepDefini
         running.delete(step.id);
         completed.set(step.id, result);
         emit({ type: 'step_finished', taskId: task.id, stepId: step.id, status: result.status, timestamp: new Date().toISOString(), detail: result.error, attempt: result.attempts });
+        await persist('running');
         if (result.status === 'failed') return finish('failed', result.error);
       }
     }
@@ -68,6 +79,7 @@ export async function executeTask(task: TaskContract, steps: readonly StepDefini
 
   function finish(status: 'succeeded' | 'failed' | 'cancelled', detail?: string): ExecutionReport {
     emit({ type: 'task_finished', taskId: task.id, status, timestamp: new Date().toISOString(), detail });
+    void persist(status);
     return { taskId: task.id, status, completed, events };
   }
 }
