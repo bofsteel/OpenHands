@@ -1,0 +1,35 @@
+name: Agent Kernel
+
+on:
+  push:
+    branches:
+      - main
+      - agent-kernel-foundation
+  pull_request:
+    paths:
+      - 'packages/agent-kernel/**'
+      - '.github/workflows/agent-kernel.yml'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build agent kernel
+        run: npm --prefix packages/agent-kernel run build
+      - name: Test agent kernel
+        run: npm --prefix packages/agent-kernel test
