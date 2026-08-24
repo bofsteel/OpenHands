@@ -3,4 +3,5 @@ export * from './executor.js';
 export * from './graph.js';
 export * from './policy.js';
 export * from './retry.js';
+export * from './snapshot.js';
 export * from './validation.js';

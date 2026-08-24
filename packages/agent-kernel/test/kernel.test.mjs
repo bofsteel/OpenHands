@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { executeTask } from '../dist/executor.js';
+import { InMemorySnapshotStore, deserializeSnapshot, serializeSnapshot } from '../dist/snapshot.js';
 import { validateGraph } from '../dist/graph.js';
 import { validateTaskContract } from '../dist/validation.js';
 
@@ -44,6 +45,29 @@ test('passes task context to every retry attempt', async () => {
   assert.equal(seen[0].task.id, 'context');
   assert.equal(seen[0].step.id, 'context-step');
   assert.ok(seen[0].signal);
+});
+
+test('serializes and restores versioned snapshots', async () => {
+  const snapshot = { taskId: 'persisted', status: 'running', completed: new Map([['a', { status: 'succeeded', output: { value: 1 }, attempts: 1 }]]), events: [{ type: 'task_started', taskId: 'persisted', status: 'running', timestamp: new Date().toISOString() }] };
+  const restored = deserializeSnapshot(serializeSnapshot(snapshot), 'persisted');
+  assert.equal(restored.taskId, 'persisted');
+  assert.equal(restored.completed.get('a').output.value, 1);
+  assert.equal(restored.events.length, 1);
+});
+
+test('rejects incompatible or unsupported snapshots', () => {
+  assert.throws(() => deserializeSnapshot(JSON.stringify({ version: 99, taskId: 'x', status: 'running', completed: [], events: [] })), /unsupported snapshot version/);
+  assert.throws(() => deserializeSnapshot(JSON.stringify({ version: 1, taskId: 'x', status: 'running', completed: [], events: [] }), 'y'), /does not match/);
+});
+
+test('stores, lists and deletes snapshots', async () => {
+  const store = new InMemorySnapshotStore();
+  const snapshot = { taskId: 'store', status: 'succeeded', completed: new Map(), events: [] };
+  await store.save(snapshot);
+  assert.deepEqual(await store.list(), ['store']);
+  assert.equal((await store.load('store')).status, 'succeeded');
+  assert.equal(await store.delete('store'), true);
+  assert.equal(await store.load('store'), undefined);
 });
 
 test('cancels before starting work', async () => {
