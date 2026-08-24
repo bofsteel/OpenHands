@@ -46,7 +46,12 @@ export async function executeTask(task: TaskContract, steps: readonly StepDefini
         const decision = evaluateStep(task, step);
         emit({ type: 'step_started', taskId: task.id, stepId: step.id, status: 'running', timestamp: new Date().toISOString(), attempt: 1 });
         if (!decision.allowed) return [step, { status: 'failed', error: decision.reason, attempts: 1 }] as const;
-        const result = await runWithRetry(step.run.bind(null), normalizeRetryPolicy(step.retry ?? task.retry), controller.signal, (attempt, error) => emit({ type: 'step_retrying', taskId: task.id, stepId: step.id, status: 'running', timestamp: new Date().toISOString(), attempt, detail: error }));
+        const result = await runWithRetry(
+          () => step.run({ task, step, completed, signal: controller.signal }),
+          normalizeRetryPolicy(step.retry ?? task.retry),
+          controller.signal,
+          (attempt, error) => emit({ type: 'step_retrying', taskId: task.id, stepId: step.id, status: 'running', timestamp: new Date().toISOString(), attempt, detail: error }),
+        );
         return [step, result] as const;
       }));
       for (const [step, result] of results) {

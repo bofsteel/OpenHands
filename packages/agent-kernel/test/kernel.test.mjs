@@ -35,6 +35,17 @@ test('retries a failed step and records the successful attempt', async () => {
   assert.equal(report.events.filter((event) => event.type === 'step_retrying').length, 2);
 });
 
+test('passes task context to every retry attempt', async () => {
+  const task = { id: 'context', objective: 'context', allowedCapabilities: new Set(), retry: { maxAttempts: 2, backoffMs: 0 }, budget: { maxSteps: 1, maxRuntimeMs: 1000, maxToolCalls: 2, maxConcurrentSteps: 1 } };
+  const seen = [];
+  const report = await executeTask(task, [{ id: 'context-step', title: 'Context', dependsOn: [], capabilities: [], run: async (context) => { seen.push(context); return seen.length === 1 ? { status: 'failed', error: 'retry' } : { status: 'succeeded' }; } }]);
+  assert.equal(report.status, 'succeeded');
+  assert.equal(seen.length, 2);
+  assert.equal(seen[0].task.id, 'context');
+  assert.equal(seen[0].step.id, 'context-step');
+  assert.ok(seen[0].signal);
+});
+
 test('cancels before starting work', async () => {
   const controller = new AbortController();
   controller.abort();
